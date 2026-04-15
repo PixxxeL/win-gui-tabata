@@ -1,0 +1,39 @@
+{
+  "schedules": [
+    {
+      "name": "Стандартный",
+      "active": true,
+      "periods": [
+        {
+          "name": "Работа",
+          "color": "0x990000",
+          "prepare": 5,
+          "duration": 3000,
+          "repeat": 3,
+          "sound": {
+            "start": null,
+            "running": null,
+            "beforeFinish": null,
+            "finish": null
+          },
+          "periods": [
+            {
+              "name": "Отдых",
+              "color": "0x009900",
+              "prepare": 0,
+              "duration": 600,
+              "repeat": 1,
+              "sound": {
+                "start": null,
+                "running": null,
+                "beforeFinish": null,
+                "finish": null
+              },
+              "periods": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

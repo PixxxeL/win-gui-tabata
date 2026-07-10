@@ -1,61 +1,161 @@
-﻿<Window x:Class="ScheduleTimer.MainWindow"
+<Window x:Class="ScheduleTimer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Таймер Расписания" Height="600" Width="500"
+        xml:lang="en-US"
+        Title="Таймер Расписания" Height="640" Width="480"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E1E"
-        Foreground="White"
-        FontFamily="Segoe UI">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="CanMinimize" FontFamily="Segoe UI" Foreground="White">
 
-        <!-- Верх: Название расписания -->
-        <TextBlock x:Name="LblTitle" Grid.Row="0" 
-                   Text="Загрузка..." FontSize="28" FontWeight="SemiBold"
-                   HorizontalAlignment="Center" Margin="0,20,0,10"/>
+    <Window.Resources>
+        <!-- Кнопка управления: серый градиент, скруглённый квадрат, синяя полоска -->
+        <Style x:Key="CtrlButton" TargetType="Button">
+            <Setter Property="Width" Value="52"/>
+            <Setter Property="Height" Value="52"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="14" BorderThickness="1" BorderBrush="#3A3F4A">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#2E333D" Offset="0"/>
+                                    <GradientStop Color="#21252D" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Grid>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <!-- Неоновый бордер с отступом: виден всегда, ярче/светится по состоянию -->
+                                <Border x:Name="glowBorder" Margin="2" CornerRadius="11"
+                                        BorderThickness="1.6" BorderBrush="#3B82F6" Opacity="0.4"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="glowBorder" Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                            <!-- Активное состояние (Tag=active): яркий неоновый бордер со свечением -->
+                            <Trigger Property="Tag" Value="active">
+                                <Setter TargetName="glowBorder" Property="Opacity" Value="1"/>
+                                <Setter TargetName="glowBorder" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="glowBorder" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#3B82F6" BlurRadius="16" ShadowDepth="0" Opacity="1"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-        <!-- Центр: Кольцо прогресса и таймер -->
-        <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <!-- Фоновое кольцо -->
-            <Ellipse Width="340" Height="340" Stroke="#333333" StrokeThickness="16" Fill="None"/>
+        <!-- Мини-кнопка заголовка (звук / свернуть / закрыть) -->
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Foreground" Value="#8A909C"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="8" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#22FFFFFF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
-            <!-- Активное кольцо прогресса -->
-            <Ellipse x:Name="RingProgress" Width="340" Height="340" 
-                     Stroke="#00BFFF" StrokeThickness="16" Fill="None"
-                     StrokeDashArray="1068.14" StrokeStartPoint="0.5,0">
-                <Ellipse.RenderTransform>
-                    <ScaleTransform ScaleX="-1" ScaleY="1" CenterX="170" CenterY="170"/>
-                </Ellipse.RenderTransform>
-            </Ellipse>
+    <!-- Корневая «карточка»: перетаскивание за любое место (кнопки перехватывают свои клики сами) -->
+    <Border CornerRadius="16" BorderThickness="1" BorderBrush="#2A2E37"
+            MouseLeftButtonDown="TitleBar_MouseDown">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#191C23" Offset="0"/>
+                <GradientStop Color="#111318" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.Background>
 
-            <!-- Цифры -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
-                <TextBlock x:Name="TxtHours" FontSize="32" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="#AAAAAA"/>
-                <TextBlock x:Name="TxtMinutes" FontSize="80" FontWeight="Bold" VerticalAlignment="Center"/>
-                <TextBlock Text=":" FontSize="40" VerticalAlignment="Center" Foreground="#AAAAAA"/>
-                <TextBlock x:Name="TxtSeconds" FontSize="32" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="#AAAAAA"/>
+        <Grid Margin="4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Строка заголовка: звук/свернуть/закрыть (перетаскивание — на корневом Border) -->
+            <Grid Grid.Row="0" Height="40" Background="Transparent">
+                <TextBlock Text="⏱  Таймер расписания" VerticalAlignment="Center"
+                           Margin="16,0,0,0" FontSize="12" Foreground="#6C7280"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            VerticalAlignment="Center" Margin="0,0,8,0">
+                    <Button x:Name="BtnSound" Style="{StaticResource CaptionButton}" Content="&#xE767;"
+                            Click="BtnSound_Click" ToolTip="Звук тиканья вкл/выкл"/>
+                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;"
+                            Click="BtnMinimize_Click" ToolTip="Свернуть"/>
+                    <Button Style="{StaticResource CaptionButton}" Content="&#xE8BB;"
+                            Click="BtnClose_Click" ToolTip="Закрыть"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Циферблат на всю площадь + наложенный текст (название / время / период) -->
+            <!-- Клик по кругу «подматывает» время; за пределами круга окно тянется как обычно -->
+            <Grid x:Name="DialArea" Grid.Row="1" Margin="22,6,22,4" Background="Transparent"
+                  SizeChanged="DialArea_SizeChanged" MouseLeftButtonDown="Dial_MouseDown">
+                <!-- Риски генерируются в code-behind (BuildTicks); размер задаётся по факту -->
+                <Canvas x:Name="TicksCanvas" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock x:Name="LblTitle" Text="Загрузка..." TextAlignment="Center"
+                               FontSize="20" FontWeight="SemiBold" Foreground="#E8EAED"
+                               HorizontalAlignment="Center" Margin="0,0,0,2"/>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock x:Name="TxtHours" FontSize="30" FontWeight="Light"
+                                   VerticalAlignment="Center" Foreground="#8A909C"/>
+                        <TextBlock x:Name="TxtMinutes" Text="00" FontSize="82" FontWeight="Light"
+                                   VerticalAlignment="Center" Foreground="#FFFFFF"/>
+                        <TextBlock x:Name="TxtSeconds" Text=":00" FontSize="30" FontWeight="Light"
+                                   VerticalAlignment="Center" Foreground="#8A909C"/>
+                    </StackPanel>
+
+                    <TextBlock x:Name="LblPhase" Text="" TextAlignment="Center"
+                               HorizontalAlignment="Center" Margin="0,2,0,0"
+                               FontSize="14" Foreground="#8A909C"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Кнопки управления -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center"
+                        Margin="0,0,0,20">
+                <Button x:Name="BtnPlay" Style="{StaticResource CtrlButton}"
+                        Margin="0,0,10,0" Click="BtnPlay_Click" ToolTip="Старт / Продолжить">
+                    <Path Data="M 0 0 L 15 8 L 0 16 Z" Fill="White" Margin="3,0,0,0"/>
+                </Button>
+                <Button x:Name="BtnPause" Style="{StaticResource CtrlButton}"
+                        Margin="10,0" Click="BtnPause_Click" ToolTip="Пауза / Продолжить">
+                    <Path Data="M 0 0 L 5 0 L 5 16 L 0 16 Z M 10 0 L 15 0 L 15 16 L 10 16 Z" Fill="White"/>
+                </Button>
+                <Button x:Name="BtnStop" Style="{StaticResource CtrlButton}"
+                        Margin="10,0,0,0" Click="BtnStop_Click" ToolTip="Стоп">
+                    <Path Data="M 0 0 L 15 0 L 15 15 L 0 15 Z" Fill="White"/>
+                </Button>
             </StackPanel>
-
-            <!-- Подпись фазы -->
-            <TextBlock x:Name="LblPhase" Grid.Row="1" VerticalAlignment="Bottom" 
-                       HorizontalAlignment="Center" FontSize="16" Foreground="#888888" Margin="0,0,0,40"/>
         </Grid>
-
-        <!-- Низ: Кнопки управления -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,30">
-            <Button x:Name="BtnPlay" Width="70" Height="70" Margin="15" Click="BtnPlay_Click" Background="#2E7D32" BorderBrush="{x:Null}">
-                <Path Data="M0,0 L24,12 L0,24 Z" Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Button>
-            <Button x:Name="BtnPause" Width="70" Height="70" Margin="15" Click="BtnPause_Click" Background="#F57C00" BorderBrush="{x:Null}">
-                <Path Data="M0,0 L8,0 L8,24 L0,24 Z M16,0 L24,0 L24,24 L16,24 Z" Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Button>
-            <Button x:Name="BtnStop" Width="70" Height="70" Margin="15" Click="BtnStop_Click" Background="#C62828" BorderBrush="{x:Null}">
-                <Path Data="M0,0 L24,0 L24,24 L0,24 Z" Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Button>
-        </StackPanel>
-    </Grid>
+    </Border>
 </Window>

@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Media;
+using System.Reflection;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
@@ -31,11 +33,11 @@ namespace ScheduleTimer
         private Brush _activeBrush = CreateFrozenBrush(Color.FromRgb(0x00, 0xBF, 0xFF));
         private DropShadowEffect? _tickGlow;
 
-        // --- Звук тиканья часов (зацикленный zvuk-chasov.mp3) ---
-        private ClockSound? _clock;
-        private bool _tickEnabled = true;
-        private const float TickBaseVolume = 0.30f;  // тихо во время хода
-        private const float TickLoudVolume = 0.85f;  // громче в последние 5 секунд
+        // --- Звук тиканья: один «тик» из встроенной записи, проигрывается раз в
+        //     секунду по таймеру — то есть синхронно с обновлением цифр секунд ---
+        private SoundPlayer? _tickPlayer;        // тихий — обычный ход
+        private SoundPlayer? _tickStrongPlayer;  // громкий — последние 5 секунд
+        private bool _tickEnabled = true;        // тиканье вкл/выкл (кнопка в заголовке)
         private const string SoundOnGlyph = "";   // Segoe MDL2: Volume
         private const string SoundOffGlyph = "";  // Segoe MDL2: Mute
 
@@ -51,9 +53,31 @@ namespace ScheduleTimer
             InitializeComponent();
             _timer.Tick += Timer_Tick;
 
+            ApplyLocalization();
             LoadTickSound();
+
+            // Версия из метаданных сборки (задаётся <Version> в .csproj)
+            var v = Assembly.GetExecutingAssembly().GetName().Version;
+            if (v != null) LblVersion.Text = $"v{v.Major}.{v.Minor}.{v.Build}";
+
             // Риски строятся в DialArea_SizeChanged, когда известен реальный размер области.
             Loaded += MainWindow_Loaded;
+        }
+
+        // Подставляет строки интерфейса по языку ОС (см. Loc).
+        private void ApplyLocalization()
+        {
+            Title = Loc.Get("app_title");
+            LblCaption.Text = "⏱  " + Loc.Get("app_title");
+            LblTitle.Text = Loc.Get("loading");
+
+            string space = Loc.Get("key_space");
+            BtnPlay.ToolTip = $"{Loc.Get("tip_play")} ({space})";
+            BtnPause.ToolTip = $"{Loc.Get("tip_pause")} ({space})";
+            BtnStop.ToolTip = $"{Loc.Get("tip_stop")} (S)";
+            BtnSound.ToolTip = $"{Loc.Get("tip_sound")} (M)";
+            BtnMinimize.ToolTip = Loc.Get("tip_minimize");
+            BtnClose.ToolTip = Loc.Get("tip_close");
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -80,8 +104,11 @@ namespace ScheduleTimer
 
         private void LoadTickSound()
         {
-            _clock = ClockSound.TryCreate("zvuk-chasov.mp3");
-            if (_clock != null) _clock.Volume = TickBaseVolume;
+            if (TickSounds.FromEmbedded("zvuk-chasov.mp3") is { } tick)
+            {
+                _tickPlayer = tick.quiet;
+                _tickStrongPlayer = tick.loud;
+            }
         }
 
         // Генерирует 60 рисок по кругу (как на циферблате часов).
@@ -142,7 +169,7 @@ namespace ScheduleTimer
                 var jsonPath = System.IO.Path.Combine(AppContext.BaseDirectory, "config.json");
                 if (!File.Exists(jsonPath))
                 {
-                    LblTitle.Text = "Файл config.json не найден";
+                    LblTitle.Text = Loc.Get("err_no_config");
                     return;
                 }
 
@@ -162,29 +189,35 @@ namespace ScheduleTimer
                 }
                 else
                 {
-                    LblTitle.Text = "Нет активных расписаний";
+                    LblTitle.Text = Loc.Get("err_no_active");
                 }
+
+                UpdatePhaseText(); // показать «текущий → следующий» и в покое
             }
             catch (Exception ex)
             {
-                LblTitle.Text = $"Ошибка: {ex.Message}";
+                LblTitle.Text = $"{Loc.Get("err_prefix")}: {ex.Message}";
             }
         }
 
         // Рекурсивно распаковывает вложенные периоды в плоскую очередь задач.
-        // Помодоро: вложенные периоды (например «Отдых») выполняются ПОСЛЕ КАЖДОГО
-        // повтора родителя, то есть чередуются: Работа → Отдых → Работа → Отдых → ...
+        // Помодоро: вложенные периоды (например «Отдых») ставятся МЕЖДУ повторами
+        // родителя — Работа → Отдых → Работа → Отдых → Работа (после последнего
+        // повтора отдыха нет).
         private void BuildQueue(List<Period> periods)
         {
             foreach (var p in periods)
             {
                 for (int i = 0; i < p.Repeat; i++)
                 {
-                    if (p.Prepare > 0)
+                    // Подготовка — только перед первым повтором, дальше не повторяется
+                    if (p.Prepare > 0 && i == 0)
                         _taskQueue.Add(new PeriodTask(p, true, p.Prepare, 0, i + 1, p.Repeat));
                     _taskQueue.Add(new PeriodTask(p, false, p.Duration, 0, i + 1, p.Repeat));
 
-                    BuildQueue(p.Periods); // вложенные периоды — после каждого повтора
+                    // Вложенные периоды — между повторами (после последнего не нужны)
+                    if (i < p.Repeat - 1)
+                        BuildQueue(p.Periods);
                 }
             }
         }
@@ -235,11 +268,12 @@ namespace ScheduleTimer
                 return;
             }
 
-            // Громкость тиканья: тихо во время хода, громче в последние 5 c периода (≥5 c)
-            if (_clock != null)
+            // Тик раз в секунду — синхронно с обновлением цифр. В последние 5 c
+            // периода (если он ≥5 c) звучит громкий вариант.
+            if (_tickEnabled)
             {
                 bool lastFive = _currentTask.TotalSeconds >= 5 && remaining <= BeforeFinishLeadSeconds;
-                _clock.Volume = !_tickEnabled ? 0f : (lastFive ? TickLoudVolume : TickBaseVolume);
+                (lastFive ? _tickStrongPlayer : _tickPlayer)?.Play();
             }
 
             UpdateUI();
@@ -254,36 +288,58 @@ namespace ScheduleTimer
             int mins = (remaining % 3600) / 60;
             int secs = remaining % 60;
 
-            TxtHours.Text = hrs > 0 ? $"{hrs}:" : "";
+            // Двоеточия — отдельные блоки фикс. размера (в XAML), их не трогаем.
+            TxtHours.Text = hrs > 0 ? $"{hrs}" : "";
+            ColonH.Visibility = hrs > 0 ? Visibility.Visible : Visibility.Collapsed;
             TxtMinutes.Text = $"{mins:D2}";
-            TxtSeconds.Text = $":{secs:D2}";
+            TxtSeconds.Text = $"{secs:D2}";
 
+            // Крупным делаем самый значимый разряд: секунды (< 1 мин) или минуты.
             bool isLessThanMinute = remaining < 60;
-            double large = 80, small = 32;
-
-            if (isLessThanMinute)
-            {
-                TxtSeconds.FontSize = large;
-                TxtMinutes.FontSize = small;
-                TxtHours.FontSize = small;
-            }
-            else
-            {
-                TxtMinutes.FontSize = large;
-                TxtSeconds.FontSize = small;
-                TxtHours.FontSize = small;
-            }
+            const double large = 80, small = 32;
+            TxtSeconds.FontSize = isLessThanMinute ? large : small;
+            TxtMinutes.FontSize = isLessThanMinute ? small : large;
+            TxtHours.FontSize = small;
 
             // Циферблат заполняется по мере прогресса (сверху по часовой)
             double progress = (double)_elapsedSeconds / _currentTask.TotalSeconds;
             UpdateTicks(progress);
 
-            // Имя периода (Работа/Отдых) уже говорит о фазе — не дублируем словом.
-            string prep = _currentTask.IsPrepare ? " · Подготовка" : "";
-            string rep = _currentTask.TotalRepeat > 1
-                ? $" · {_currentTask.CurrentRepeat}/{_currentTask.TotalRepeat}"
-                : "";
-            LblPhase.Text = $"{_currentTask.Period.Name}{prep}{rep}";
+            UpdatePhaseText();
+        }
+
+        // Текст под часами: «{текущее}  →  {следующее}». Отражает текущий момент и
+        // показывается всегда — в игре, на паузе и в покое. Примеры:
+        //   Подготовка → Работа
+        //   Работа [1/3] → Отдых
+        //   Отдых → Работа
+        //   Работа [3/3] → Финиш
+        private void UpdatePhaseText()
+        {
+            // В покое «текущий» — первая задача очереди (то, что запустится).
+            var current = _currentTask ?? _taskQueue.FirstOrDefault();
+            if (current == null) { LblPhase.Text = ""; return; }
+
+            string currentName, nextName;
+            if (current.IsPrepare)
+            {
+                // Подготовка — отдельная фаза; за ней идёт работа того же периода.
+                currentName = Loc.Get("prepare");
+                nextName = current.Period.Name;
+            }
+            else
+            {
+                string counter = current.TotalRepeat > 1
+                    ? $" [{current.CurrentRepeat}/{current.TotalRepeat}]"
+                    : "";
+                currentName = $"{current.Period.Name}{counter}";
+
+                // Следующий период = ближайшая задача другого периода; иначе конец.
+                var next = _taskQueue.FirstOrDefault(t => t.Period != current.Period);
+                nextName = next?.Period.Name ?? Loc.Get("finish");
+            }
+
+            LblPhase.Text = $"{currentName} → {nextName}";
         }
 
         private void UpdateColor()
@@ -306,8 +362,12 @@ namespace ScheduleTimer
                 DragMove();
         }
 
-        // Клик по кругу циферблата «подматывает» время пропорционально углу.
-        // За пределами круга событие не гасим — тогда окно перетаскивается как обычно.
+        // Доля радиуса, начиная с которой клик считается «по кольцу рисок».
+        // Риски занимают внешние ~10%; берём чуть шире для удобного попадания.
+        private const double DialRingInnerFraction = 0.80;
+
+        // Клик по КОЛЬЦУ рисок «подматывает» время пропорционально углу.
+        // Клик в центре (по тексту) или вне круга не гасим — окно перетаскивается.
         private void Dial_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton != MouseButton.Left) return;
@@ -318,9 +378,10 @@ namespace ScheduleTimer
             var pos = e.GetPosition(TicksCanvas);
             double cx = side / 2, cy = side / 2;
             double dx = pos.X - cx, dy = pos.Y - cy;
-            if (Math.Sqrt(dx * dx + dy * dy) > cx) return; // вне круга → перетаскивание окна
+            double r = Math.Sqrt(dx * dx + dy * dy);
+            if (r > cx || r < cx * DialRingInnerFraction) return; // не по кольцу → тянем окно
 
-            e.Handled = true;                 // внутри круга окно не тянем
+            e.Handled = true;                 // по кольцу — окно не тянем
             if (_currentTask == null) return; // нет активного периода — мотать нечего
 
             double angle = Math.Atan2(dx, -dy); // 0 — сверху, по часовой
@@ -346,9 +407,6 @@ namespace ScheduleTimer
             BtnSound.Foreground = _tickEnabled
                 ? CreateFrozenBrush(Color.FromRgb(0x8A, 0x90, 0x9C))
                 : CreateFrozenBrush(Color.FromRgb(0x55, 0x5A, 0x64));
-
-            // Мгновенно применяем к идущему тиканью
-            if (_clock != null) _clock.Volume = _tickEnabled ? TickBaseVolume : 0f;
         }
 
         // --- Управление ---
@@ -358,7 +416,6 @@ namespace ScheduleTimer
             {
                 StartNextTask();
                 _timer.Start();
-                if (_clock != null) { _clock.Volume = _tickEnabled ? TickBaseVolume : 0f; _clock.Start(); }
             }
             else if (_state == RunState.Paused)
             {
@@ -373,7 +430,6 @@ namespace ScheduleTimer
             {
                 _state = RunState.Paused;
                 _timer.Stop();
-                _clock?.Pause();
             }
             else if (_state == RunState.Paused)
             {
@@ -387,7 +443,29 @@ namespace ScheduleTimer
         {
             _state = _currentTask?.IsPrepare == true ? RunState.Prepare : RunState.Working;
             _timer.Start();
-            _clock?.Resume();
+        }
+
+        // Пробел — старт/пауза, S — стоп, M — звук. Preview, чтобы Пробел не
+        // «нажимал» сфокусированную кнопку.
+        private void Window_KeyDown(object sender, KeyEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case Key.Space: TogglePlayPause(); break;
+                case Key.S: Stop(); break;
+                case Key.M: BtnSound_Click(this, new RoutedEventArgs()); break;
+                default: return;
+            }
+            e.Handled = true;
+        }
+
+        // Единый тоггл для Пробела: идёт — на паузу, иначе — старт/продолжить.
+        private void TogglePlayPause()
+        {
+            if (_state is RunState.Working or RunState.Prepare)
+                BtnPause_Click(this, new RoutedEventArgs());
+            else
+                BtnPlay_Click(this, new RoutedEventArgs());
         }
 
         private void BtnStop_Click(object sender, RoutedEventArgs e) => Stop();
@@ -395,17 +473,16 @@ namespace ScheduleTimer
         private void Stop()
         {
             _timer.Stop();
-            _clock?.Stop();
             _state = RunState.Idle;
             _taskQueue.Clear();
             _currentTask = null;
             _elapsedSeconds = 0;
 
             UpdateTicks(0); // все риски гаснут
-            TxtHours.Text = ""; TxtMinutes.Text = "00"; TxtSeconds.Text = ":00";
-            LblPhase.Text = "";
+            TxtHours.Text = ""; ColonH.Visibility = Visibility.Collapsed;
+            TxtMinutes.Text = "00"; TxtSeconds.Text = "00";
             UpdateButtonStates();
-            LoadSchedule(); // Перезагрузка JSON для сброса
+            LoadSchedule(); // перечитывает JSON и обновляет текст фазы (в т.ч. в покое)
         }
     }
 

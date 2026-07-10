@@ -32,12 +32,12 @@ namespace ScheduleTimer
         [JsonPropertyName("periods")] public List<Period> Periods { get; set; } = new();
     }
 
+    // Звуки событий фазы. Имя файла рядом с exe (WAV/MP3) либо null.
     public class SoundEvents
     {
-        [JsonPropertyName("start")] public string? Start { get; set; }
-        [JsonPropertyName("running")] public string? Running { get; set; }
-        [JsonPropertyName("beforeFinish")] public string? BeforeFinish { get; set; }
-        [JsonPropertyName("finish")] public string? Finish { get; set; }
+        [JsonPropertyName("start")] public string? Start { get; set; }              // в начале фазы
+        [JsonPropertyName("beforeFinish")] public string? BeforeFinish { get; set; } // за 5 c до конца
+        [JsonPropertyName("finish")] public string? Finish { get; set; }            // в конце фазы
     }
 
     /// <summary>

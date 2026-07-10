@@ -5,7 +5,8 @@
         Title="Таймер Расписания" Height="640" Width="480"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        ResizeMode="CanMinimize" FontFamily="Segoe UI" Foreground="White">
+        ResizeMode="CanMinimize" FontFamily="Segoe UI" Foreground="White"
+        PreviewKeyDown="Window_KeyDown">
 
     <Window.Resources>
         <!-- Кнопка управления: серый градиент, скруглённый квадрат, синяя полоска -->
@@ -100,16 +101,16 @@
 
             <!-- Строка заголовка: звук/свернуть/закрыть (перетаскивание — на корневом Border) -->
             <Grid Grid.Row="0" Height="40" Background="Transparent">
-                <TextBlock Text="⏱  Таймер расписания" VerticalAlignment="Center"
+                <TextBlock x:Name="LblCaption" Text="⏱  Таймер расписания" VerticalAlignment="Center"
                            Margin="16,0,0,0" FontSize="12" Foreground="#6C7280"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                             VerticalAlignment="Center" Margin="0,0,8,0">
                     <Button x:Name="BtnSound" Style="{StaticResource CaptionButton}" Content="&#xE767;"
-                            Click="BtnSound_Click" ToolTip="Звук тиканья вкл/выкл"/>
-                    <Button Style="{StaticResource CaptionButton}" Content="&#xE921;"
-                            Click="BtnMinimize_Click" ToolTip="Свернуть"/>
-                    <Button Style="{StaticResource CaptionButton}" Content="&#xE8BB;"
-                            Click="BtnClose_Click" ToolTip="Закрыть"/>
+                            Click="BtnSound_Click"/>
+                    <Button x:Name="BtnMinimize" Style="{StaticResource CaptionButton}" Content="&#xE921;"
+                            Click="BtnMinimize_Click"/>
+                    <Button x:Name="BtnClose" Style="{StaticResource CaptionButton}" Content="&#xE8BB;"
+                            Click="BtnClose_Click"/>
                 </StackPanel>
             </Grid>
 
@@ -125,12 +126,18 @@
                                FontSize="20" FontWeight="SemiBold" Foreground="#E8EAED"
                                HorizontalAlignment="Center" Margin="0,0,0,2"/>
 
+                    <!-- Двоеточия — отдельные блоки с фиксированным мелким размером
+                         (код их не масштабирует, только цифры) -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                         <TextBlock x:Name="TxtHours" FontSize="30" FontWeight="Light"
                                    VerticalAlignment="Center" Foreground="#8A909C"/>
+                        <TextBlock x:Name="ColonH" Text=":" FontSize="30" FontWeight="Light"
+                                   VerticalAlignment="Center" Foreground="#8A909C" Visibility="Collapsed"/>
                         <TextBlock x:Name="TxtMinutes" Text="00" FontSize="82" FontWeight="Light"
                                    VerticalAlignment="Center" Foreground="#FFFFFF"/>
-                        <TextBlock x:Name="TxtSeconds" Text=":00" FontSize="30" FontWeight="Light"
+                        <TextBlock Text=":" FontSize="30" FontWeight="Light"
+                                   VerticalAlignment="Center" Foreground="#8A909C"/>
+                        <TextBlock x:Name="TxtSeconds" Text="00" FontSize="30" FontWeight="Light"
                                    VerticalAlignment="Center" Foreground="#8A909C"/>
                     </StackPanel>
 
@@ -140,21 +147,24 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Кнопки управления -->
-            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center"
-                        Margin="0,0,0,20">
-                <Button x:Name="BtnPlay" Style="{StaticResource CtrlButton}"
-                        Margin="0,0,10,0" Click="BtnPlay_Click" ToolTip="Старт / Продолжить">
-                    <Path Data="M 0 0 L 15 8 L 0 16 Z" Fill="White" Margin="3,0,0,0"/>
-                </Button>
-                <Button x:Name="BtnPause" Style="{StaticResource CtrlButton}"
-                        Margin="10,0" Click="BtnPause_Click" ToolTip="Пауза / Продолжить">
-                    <Path Data="M 0 0 L 5 0 L 5 16 L 0 16 Z M 10 0 L 15 0 L 15 16 L 10 16 Z" Fill="White"/>
-                </Button>
-                <Button x:Name="BtnStop" Style="{StaticResource CtrlButton}"
-                        Margin="10,0,0,0" Click="BtnStop_Click" ToolTip="Стоп">
-                    <Path Data="M 0 0 L 15 0 L 15 15 L 0 15 Z" Fill="White"/>
-                </Button>
+            <!-- Кнопки управления + мелкая версия внизу -->
+            <StackPanel Grid.Row="2" HorizontalAlignment="Center" Margin="0,0,0,10">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button x:Name="BtnPlay" Style="{StaticResource CtrlButton}"
+                            Margin="0,0,10,0" Click="BtnPlay_Click" ToolTip="Старт / Продолжить (Пробел)">
+                        <Path Data="M 0 0 L 15 8 L 0 16 Z" Fill="White" Margin="3,0,0,0"/>
+                    </Button>
+                    <Button x:Name="BtnPause" Style="{StaticResource CtrlButton}"
+                            Margin="10,0" Click="BtnPause_Click" ToolTip="Пауза / Продолжить (Пробел)">
+                        <Path Data="M 0 0 L 5 0 L 5 16 L 0 16 Z M 10 0 L 15 0 L 15 16 L 10 16 Z" Fill="White"/>
+                    </Button>
+                    <Button x:Name="BtnStop" Style="{StaticResource CtrlButton}"
+                            Margin="10,0,0,0" Click="BtnStop_Click" ToolTip="Стоп (S)">
+                        <Path Data="M 0 0 L 15 0 L 15 15 L 0 15 Z" Fill="White"/>
+                    </Button>
+                </StackPanel>
+                <TextBlock x:Name="LblVersion" Text="v1.0.0" HorizontalAlignment="Center"
+                           Margin="0,8,0,0" FontSize="9" Foreground="#4A4F59"/>
             </StackPanel>
         </Grid>
     </Border>

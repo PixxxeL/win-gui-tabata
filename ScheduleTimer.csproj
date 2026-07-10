@@ -6,27 +6,43 @@
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.3.0" />
   </ItemGroup>
 
-  <!-- config.json должен лежать рядом с exe во время выполнения -->
+  <!-- Звук тиканья вшит в бинарник как ресурс (не копируется наружу) -->
+  <ItemGroup>
+    <None Remove="zvuk-chasov.mp3" />
+    <EmbeddedResource Include="zvuk-chasov.mp3" />
+  </ItemGroup>
+
+  <!-- config.json остаётся внешним (его правит пользователь) -->
   <ItemGroup>
     <None Update="config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
   </ItemGroup>
 
-  <!-- Звуковые файлы (если добавите) тоже копируем в выходную папку -->
+  <!-- Пользовательские звуки периодов (если добавите рядом) тоже копируем -->
   <ItemGroup>
     <None Update="*.wav">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="*.mp3">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
   </ItemGroup>
+
+  <!-- Single-file publish иногда не забирает content-глобы. Гарантированно
+       кладём внешние ассеты рядом с exe после публикации (кроме вшитого mp3). -->
+  <Target Name="CopyExternalAssets" AfterTargets="Publish">
+    <ItemGroup>
+      <ExternalAssets Include="$(MSBuildProjectDirectory)\config.json" />
+      <ExternalAssets Include="$(MSBuildProjectDirectory)\*.wav" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ExternalAssets)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

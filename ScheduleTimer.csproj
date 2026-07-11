@@ -13,6 +13,21 @@
     <PackageReference Include="NAudio" Version="2.3.0" />
   </ItemGroup>
 
+  <!-- Ключ и id AppMetrica ЗАПЕКАЮТСЯ в сборку из переменных окружения при билде
+       (MSBuild читает env как свойства). В репозитории — только имена переменных, а не
+       значения; значения задаются в окружении сборочной машины перед build/publish.
+       Если переменных нет — метаданные пустые и аналитика выключена. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>APPMETRICA_POST_API_KEY</_Parameter1>
+      <_Parameter2>$(APPMETRICA_POST_API_KEY)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>APPMETRICA_APP_ID</_Parameter1>
+      <_Parameter2>$(APPMETRICA_APP_ID)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <!-- Звук тиканья вшит в бинарник как ресурс (не копируется наружу) -->
   <ItemGroup>
     <None Remove="zvuk-chasov.mp3" />

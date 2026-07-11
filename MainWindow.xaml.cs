@@ -60,6 +60,7 @@ namespace ScheduleTimer
 
             ApplyLocalization();
             LoadTickSound();
+            Analytics.AppStarted(); // отметить запуск (no-op, если аналитика выключена)
 
             // Версия из метаданных сборки (задаётся <Version> в .csproj)
             var v = Assembly.GetExecutingAssembly().GetName().Version;
@@ -294,6 +295,7 @@ namespace ScheduleTimer
                 return;
             _stageLogged = true;
             Logger.StageCompleted(_currentTask.Period.Name, _stageActiveSeconds);
+            Analytics.StageCompleted(_currentTask.Period.Name, _stageActiveSeconds);
         }
 
         // Приводит петлю тиканья в соответствие текущему состоянию: играет непрерывно, пока

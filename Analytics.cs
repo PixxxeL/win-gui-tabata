@@ -67,15 +67,13 @@ namespace ScheduleTimer
             return "";
         }
 
-        // Стабильный анонимный идентификатор (случайный GUID) в файле рядом с exe —
+        // Стабильный анонимный идентификатор (случайный GUID) в файле в каталоге данных —
         // чтобы события одного пользователя связывались. Персональных данных нет.
         private static string GetOrCreateProfileId()
         {
             try
             {
-                var exe = Environment.ProcessPath;
-                var dir = !string.IsNullOrEmpty(exe) ? Path.GetDirectoryName(exe) : null;
-                var path = Path.Combine(dir ?? AppContext.BaseDirectory, "analytics-id.txt");
+                var path = Path.Combine(AppPaths.DataDir, "analytics-id.txt");
 
                 if (File.Exists(path))
                 {

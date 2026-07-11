@@ -172,7 +172,17 @@ namespace ScheduleTimer
         {
             try
             {
-                var jsonPath = System.IO.Path.Combine(AppContext.BaseDirectory, "config.json");
+                // Конфиг — в каталоге данных (портатив: рядом с exe; MSIX: %LOCALAPPDATA%).
+                // Если его там ещё нет (первый запуск MSIX) — копируем дефолт из папки установки.
+                var jsonPath = System.IO.Path.Combine(AppPaths.DataDir, "config.json");
+                if (!File.Exists(jsonPath))
+                {
+                    var bundled = System.IO.Path.Combine(AppPaths.InstallDir, "config.json");
+                    if (File.Exists(bundled))
+                    {
+                        try { File.Copy(bundled, jsonPath); } catch { /* останется дефолт из папки установки */ }
+                    }
+                }
                 if (!File.Exists(jsonPath))
                 {
                     LblTitle.Text = Loc.Get("err_no_config");

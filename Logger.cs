@@ -11,16 +11,8 @@ namespace ScheduleTimer
     /// </summary>
     public static class Logger
     {
-        private static readonly string LogPath = BuildPath();
-
-        private static string BuildPath()
-        {
-            // Именно рядом с exe: в single-file сборке AppContext.BaseDirectory — это временная
-            // папка распаковки, а Environment.ProcessPath указывает на сам исполняемый файл.
-            var exe = Environment.ProcessPath;
-            var dir = !string.IsNullOrEmpty(exe) ? Path.GetDirectoryName(exe) : null;
-            return Path.Combine(dir ?? AppContext.BaseDirectory, "timetracker.log");
-        }
+        // Портатив — рядом с exe; MSIX — %LOCALAPPDATA%\ScheduleTimer (install-папка read-only).
+        private static readonly string LogPath = Path.Combine(AppPaths.DataDir, "timetracker.log");
 
         /// <summary>Отметка запуска приложения (текст лога — на английском).</summary>
         public static void AppStarted() => Write("--- Application started ---");

@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -20,6 +21,8 @@ namespace ScheduleTimer
         private readonly List<PeriodTask> _taskQueue = new();
         private PeriodTask? _currentTask;
         private int _elapsedSeconds;
+        private int _stageActiveSeconds;   // фактически отработанные секунды этапа (для лога; не зависит от перемотки)
+        private bool _stageLogged;         // этап уже записан в лог (чтобы не задвоить)
         private RunState _state = RunState.Idle;
         private string _scheduleName = "Нет данных";
 
@@ -33,11 +36,13 @@ namespace ScheduleTimer
         private Brush _activeBrush = CreateFrozenBrush(Color.FromRgb(0x00, 0xBF, 0xFF));
         private DropShadowEffect? _tickGlow;
 
-        // --- Звук тиканья: один «тик» из встроенной записи, проигрывается раз в
-        //     секунду по таймеру — то есть синхронно с обновлением цифр секунд ---
+        // --- Звук тиканья: бесшовная петля «тик-так» из встроенной записи, играется
+        //     непрерывно (PlayLooping) пока идёт отсчёт; в последние 5 c — громкий вариант ---
         private SoundPlayer? _tickPlayer;        // тихий — обычный ход
         private SoundPlayer? _tickStrongPlayer;  // громкий — последние 5 секунд
         private bool _tickEnabled = true;        // тиканье вкл/выкл (кнопка в заголовке)
+        private bool _tickLooping;               // петля сейчас играет
+        private bool _tickLoopLoud;              // какой вариант зациклен (громкий/тихий)
         private const string SoundOnGlyph = "";   // Segoe MDL2: Volume
         private const string SoundOffGlyph = "";  // Segoe MDL2: Mute
 
@@ -228,12 +233,15 @@ namespace ScheduleTimer
 
             _currentTask = _taskQueue[0];
             _elapsedSeconds = 0;
+            _stageActiveSeconds = 0;   // новый этап — счётчик отработанного времени с нуля
+            _stageLogged = false;
             _state = _currentTask.IsPrepare ? RunState.Prepare : RunState.Working;
 
             UpdateColor();
             SoundHelper.Play(_currentTask.Period.Sound.Start);
             UpdateUI();
             UpdateButtonStates();
+            RefreshTicking();
         }
 
         // Подсвечивает активную кнопку по текущему состоянию.
@@ -248,6 +256,7 @@ namespace ScheduleTimer
             if (_state == RunState.Paused || _currentTask == null) return;
 
             _elapsedSeconds++;
+            _stageActiveSeconds++; // тикает только когда идёт отсчёт → паузы не учитываются
             _currentTask = _currentTask with { ElapsedSeconds = _elapsedSeconds };
             int remaining = _currentTask.TotalSeconds - _elapsedSeconds;
 
@@ -256,6 +265,7 @@ namespace ScheduleTimer
                 SoundHelper.Play(_currentTask.Period.Sound.BeforeFinish);
             if (remaining == 0)
             {
+                LogCurrentStage(); // этап завершился сам — фиксируем отработанное время
                 SoundHelper.Play(_currentTask.Period.Sound.Finish);
                 _taskQueue.RemoveAt(0);
 
@@ -268,15 +278,59 @@ namespace ScheduleTimer
                 return;
             }
 
-            // Тик раз в секунду — синхронно с обновлением цифр. В последние 5 c
-            // периода (если он ≥5 c) звучит громкий вариант.
-            if (_tickEnabled)
-            {
-                bool lastFive = _currentTask.TotalSeconds >= 5 && remaining <= BeforeFinishLeadSeconds;
-                (lastFive ? _tickStrongPlayer : _tickPlayer)?.Play();
-            }
+            // На смене секунды освежаем петлю тиканья: в последние 5 c периода (если он ≥5 c)
+            // переключаемся на громкий вариант.
+            RefreshTicking();
 
             UpdateUI();
+        }
+
+        // Пишет в лог фактически отработанное время текущего этапа — ровно один раз.
+        // Вызывается при завершении этапа (сам/Стоп/закрытие). Паузы уже исключены счётчиком.
+        // Подготовку не логируем: это лид-ин без собственного имени в конфиге.
+        private void LogCurrentStage()
+        {
+            if (_currentTask == null || _stageLogged || _currentTask.IsPrepare || _stageActiveSeconds <= 0)
+                return;
+            _stageLogged = true;
+            Logger.StageCompleted(_currentTask.Period.Name, _stageActiveSeconds);
+        }
+
+        // Приводит петлю тиканья в соответствие текущему состоянию: играет непрерывно, пока
+        // идёт отсчёт и звук включён; в последние 5 c — громкий вариант; иначе молчит.
+        private void RefreshTicking()
+        {
+            bool shouldTick = _tickEnabled && _currentTask != null &&
+                              _state is RunState.Working or RunState.Prepare;
+            if (!shouldTick) { StopTicking(); return; }
+
+            bool loud = _currentTask!.TotalSeconds >= 5 &&
+                        (_currentTask.TotalSeconds - _elapsedSeconds) <= BeforeFinishLeadSeconds;
+            StartTicking(loud);
+        }
+
+        // Запускает нужную петлю. Если требуемый вариант уже играет — ничего не трогаем,
+        // чтобы не рвать бесшовный цикл перезапуском.
+        private void StartTicking(bool loud)
+        {
+            if (_tickLooping && _tickLoopLoud == loud) return;
+
+            var player = loud ? _tickStrongPlayer : _tickPlayer;
+            if (player == null) return;
+
+            _tickPlayer?.Stop();
+            _tickStrongPlayer?.Stop();
+            player.PlayLooping();
+            _tickLooping = true;
+            _tickLoopLoud = loud;
+        }
+
+        private void StopTicking()
+        {
+            if (!_tickLooping) return;
+            _tickPlayer?.Stop();
+            _tickStrongPlayer?.Stop();
+            _tickLooping = false;
         }
 
         private void UpdateUI()
@@ -396,6 +450,92 @@ namespace ScheduleTimer
             UpdateUI();
         }
 
+        // Мягкое голубое пятно-подсветка над КОЛЬЦОМ рисок (тот же диапазон радиуса, что и подмотка).
+        // Пятно догоняет курсор через покадровое сглаживание: держим целевую точку (курсор)
+        // и текущую (пятно), каждый кадр двигаем текущую к целевой на долю расстояния.
+        private const double GlowFollow = 0.28; // скорость догона за кадр (~60 fps); больше — резче
+        private bool _hoverGlowShown;
+        private bool _glowFollowing;             // подписан ли кадровый цикл
+        private double _glowTargetX, _glowTargetY; // куда (курсор)
+        private double _glowX, _glowY;             // где сейчас пятно
+
+        private void DialArea_MouseMove(object sender, MouseEventArgs e)
+        {
+            double side = TicksCanvas.Width;
+            if (side <= 0) return;
+
+            var pos = e.GetPosition(TicksCanvas);
+            double cx = side / 2, cy = side / 2;
+            double dx = pos.X - cx, dy = pos.Y - cy;
+            double r = Math.Sqrt(dx * dx + dy * dy);
+
+            bool onRing = r <= cx && r >= cx * DialRingInnerFraction;
+            if (onRing)
+            {
+                _glowTargetX = dx;   // смещение от центра циферблата
+                _glowTargetY = dy;
+                StartGlowFollow();   // запустить догон (если ещё не идёт)
+            }
+            SetHoverGlow(onRing);
+        }
+
+        private void DialArea_MouseLeave(object sender, MouseEventArgs e) => SetHoverGlow(false);
+
+        // Плавно проявляет/гасит подсветку; анимируем только на смене состояния.
+        private void SetHoverGlow(bool show)
+        {
+            if (show == _hoverGlowShown) return;
+            _hoverGlowShown = show;
+
+            if (show)
+            {
+                // Появляемся сразу под курсором, без «прилёта» из старой точки.
+                _glowX = _glowTargetX; _glowY = _glowTargetY;
+                HoverGlowT.X = _glowX; HoverGlowT.Y = _glowY;
+            }
+            else
+            {
+                StopGlowFollow();    // скрыто — кадровый цикл не нужен
+            }
+
+            var anim = new DoubleAnimation(show ? 1.0 : 0.0, TimeSpan.FromMilliseconds(180))
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            HoverGlow.BeginAnimation(UIElement.OpacityProperty, anim);
+        }
+
+        private void StartGlowFollow()
+        {
+            if (_glowFollowing) return;
+            _glowFollowing = true;
+            CompositionTarget.Rendering += OnGlowRender;
+        }
+
+        private void StopGlowFollow()
+        {
+            if (!_glowFollowing) return;
+            _glowFollowing = false;
+            CompositionTarget.Rendering -= OnGlowRender;
+        }
+
+        // Каждый кадр подтягиваем пятно к курсору; когда доехали — отписываемся (нет фоновой нагрузки).
+        private void OnGlowRender(object? sender, EventArgs e)
+        {
+            double ax = _glowTargetX - _glowX, ay = _glowTargetY - _glowY;
+            if (ax * ax + ay * ay < 0.25) // < 0.5 px — доехали, замираем
+            {
+                _glowX = _glowTargetX; _glowY = _glowTargetY;
+                HoverGlowT.X = _glowX; HoverGlowT.Y = _glowY;
+                StopGlowFollow();
+                return;
+            }
+            _glowX += ax * GlowFollow;
+            _glowY += ay * GlowFollow;
+            HoverGlowT.X = _glowX;
+            HoverGlowT.Y = _glowY;
+        }
+
         private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
@@ -407,6 +547,7 @@ namespace ScheduleTimer
             BtnSound.Foreground = _tickEnabled
                 ? CreateFrozenBrush(Color.FromRgb(0x8A, 0x90, 0x9C))
                 : CreateFrozenBrush(Color.FromRgb(0x55, 0x5A, 0x64));
+            RefreshTicking(); // включить/заглушить петлю сразу
         }
 
         // --- Управление ---
@@ -430,6 +571,7 @@ namespace ScheduleTimer
             {
                 _state = RunState.Paused;
                 _timer.Stop();
+                StopTicking(); // на паузе тиканье замолкает
             }
             else if (_state == RunState.Paused)
             {
@@ -438,11 +580,12 @@ namespace ScheduleTimer
             UpdateButtonStates();
         }
 
-        // Возобновление с паузы: восстановить фазу и запустить таймер.
+        // Возобновление с паузы: восстановить фазу, запустить таймер и петлю тиканья.
         private void Resume()
         {
             _state = _currentTask?.IsPrepare == true ? RunState.Prepare : RunState.Working;
             _timer.Start();
+            RefreshTicking();
         }
 
         // Пробел — старт/пауза, S — стоп, M — звук. Preview, чтобы Пробел не
@@ -472,7 +615,9 @@ namespace ScheduleTimer
 
         private void Stop()
         {
+            LogCurrentStage(); // остановлен вручную — фиксируем отработанное время (идемпотентно)
             _timer.Stop();
+            StopTicking();
             _state = RunState.Idle;
             _taskQueue.Clear();
             _currentTask = null;
@@ -483,6 +628,13 @@ namespace ScheduleTimer
             TxtMinutes.Text = "00"; TxtSeconds.Text = "00";
             UpdateButtonStates();
             LoadSchedule(); // перечитывает JSON и обновляет текст фазы (в т.ч. в покое)
+        }
+
+        // При закрытии окна фиксируем незавершённый этап — иначе отработанное время потеряется.
+        protected override void OnClosed(EventArgs e)
+        {
+            LogCurrentStage();
+            base.OnClosed(e);
         }
     }
 

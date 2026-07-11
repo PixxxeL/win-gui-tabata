@@ -41,6 +41,7 @@ namespace ScheduleTimer
                 ["tip_sound"] = "Ticking sound on/off", ["tip_minimize"] = "Minimize", ["tip_close"] = "Close",
                 ["key_space"] = "Space", ["err_no_config"] = "config.json not found",
                 ["err_no_active"] = "No active schedules", ["err_prefix"] = "Error", ["loading"] = "Loading…",
+                ["already_running"] = "The application is already running",
             },
             ["ru"] = new()
             {
@@ -49,6 +50,7 @@ namespace ScheduleTimer
                 ["tip_sound"] = "Звук тиканья вкл/выкл", ["tip_minimize"] = "Свернуть", ["tip_close"] = "Закрыть",
                 ["key_space"] = "Пробел", ["err_no_config"] = "Файл config.json не найден",
                 ["err_no_active"] = "Нет активных расписаний", ["err_prefix"] = "Ошибка", ["loading"] = "Загрузка…",
+                ["already_running"] = "Приложение уже запущено",
             },
             ["zh"] = new()
             {
@@ -57,6 +59,7 @@ namespace ScheduleTimer
                 ["tip_sound"] = "滴答声 开/关", ["tip_minimize"] = "最小化", ["tip_close"] = "关闭",
                 ["key_space"] = "空格", ["err_no_config"] = "未找到 config.json",
                 ["err_no_active"] = "没有启用的日程", ["err_prefix"] = "错误", ["loading"] = "加载中…",
+                ["already_running"] = "应用程序已在运行",
             },
             ["ja"] = new()
             {
@@ -65,6 +68,7 @@ namespace ScheduleTimer
                 ["tip_sound"] = "秒針音 オン/オフ", ["tip_minimize"] = "最小化", ["tip_close"] = "閉じる",
                 ["key_space"] = "スペース", ["err_no_config"] = "config.json が見つかりません",
                 ["err_no_active"] = "有効なスケジュールがありません", ["err_prefix"] = "エラー", ["loading"] = "読み込み中…",
+                ["already_running"] = "アプリはすでに起動しています",
             },
             ["de"] = new()
             {

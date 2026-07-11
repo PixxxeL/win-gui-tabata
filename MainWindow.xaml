@@ -86,9 +86,12 @@
     <Border CornerRadius="16" BorderThickness="1" BorderBrush="#2A2E37"
             MouseLeftButtonDown="TitleBar_MouseDown">
         <Border.Background>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                <GradientStop Color="#191C23" Offset="0"/>
-                <GradientStop Color="#111318" Offset="1"/>
+            <!-- Лёгкий диагональный градиент: чуть светлее в верхнем-левом углу,
+                 мягкая средняя ступень, темнее в нижнем-правом — даёт объём, не меняя тёмный тон -->
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#1E222C" Offset="0"/>
+                <GradientStop Color="#171A21" Offset="0.55"/>
+                <GradientStop Color="#0F1116" Offset="1"/>
             </LinearGradientBrush>
         </Border.Background>
 
@@ -117,7 +120,30 @@
             <!-- Циферблат на всю площадь + наложенный текст (название / время / период) -->
             <!-- Клик по кругу «подматывает» время; за пределами круга окно тянется как обычно -->
             <Grid x:Name="DialArea" Grid.Row="1" Margin="22,6,22,4" Background="Transparent"
-                  SizeChanged="DialArea_SizeChanged" MouseLeftButtonDown="Dial_MouseDown">
+                  SizeChanged="DialArea_SizeChanged" MouseLeftButtonDown="Dial_MouseDown"
+                  MouseMove="DialArea_MouseMove" MouseLeave="DialArea_MouseLeave">
+                <!-- Мягкое голубое пятно-подсветка, следует за курсором по кольцу рисок.
+                     Нижний слой (над фоном, под рисками/текстом); позиция — в code-behind
+                     через HoverGlowT. Центрируется в области, смещается TranslateTransform. -->
+                <Ellipse x:Name="HoverGlow" Width="112" Height="112"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Opacity="0" IsHitTestVisible="False"
+                         RenderTransformOrigin="0.5,0.5">
+                    <Ellipse.RenderTransform>
+                        <TranslateTransform x:Name="HoverGlowT"/>
+                    </Ellipse.RenderTransform>
+                    <Ellipse.Fill>
+                        <RadialGradientBrush>
+                            <GradientStop Color="#4455AEEF" Offset="0"/>
+                            <GradientStop Color="#1A55AEEF" Offset="0.55"/>
+                            <GradientStop Color="#0055AEEF" Offset="1"/>
+                        </RadialGradientBrush>
+                    </Ellipse.Fill>
+                    <Ellipse.Effect>
+                        <BlurEffect Radius="24"/>
+                    </Ellipse.Effect>
+                </Ellipse>
+
                 <!-- Риски генерируются в code-behind (BuildTicks); размер задаётся по факту -->
                 <Canvas x:Name="TicksCanvas" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 

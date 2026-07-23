@@ -1,0 +1,130 @@
+# Сборка на GitHub Actions.
+# Запуск: вручную (workflow_dispatch) или пушем тега вида v1.0.2.
+# При пуше тега готовые zip-архивы прикрепляются к GitHub Release.
+#
+# Собираются два варианта exe (оба — один файл + config.json рядом):
+#   self-contained — рантайм .NET внутри, работает везде, но тяжёлый (~150 МБ);
+#   no-runtime     — лёгкий, требует установленный .NET 8 Desktop Runtime.
+#
+# Сборка MSIX временно отключена (ждём одобрения имени в Microsoft Store) —
+# закомментированные шаги в конце файла.
+#
+# Версия берётся из имени тега: v1.0.2 -> 1.0.2 в csproj (версия exe)
+# и 1.0.2.0 в Package.appxmanifest (пригодится, когда вернём MSIX).
+#
+# Секреты (Settings -> Secrets and variables -> Actions):
+#   APPMETRICA_POST_API_KEY  — ключ Post API AppMetrica
+#   APPMETRICA_APP_ID        — id приложения AppMetrica
+# Без них сборка пройдёт, но аналитика будет выключена.
+
+name: Build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # нужно для создания релиза
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    env:
+      APPMETRICA_POST_API_KEY: ${{ secrets.APPMETRICA_POST_API_KEY }}
+      APPMETRICA_APP_ID: ${{ secrets.APPMETRICA_APP_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Версия из тега: v1.0.2 -> csproj 1.0.2, манифест 1.0.2.0
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $ver3 = "${{ github.ref_name }}".TrimStart("v")
+          if ($ver3 -notmatch '^\d+\.\d+\.\d+$') { throw "Тег должен быть вида v1.2.3, получен: ${{ github.ref_name }}" }
+          $ver4 = "$ver3.0"
+
+          $csprojPath = "ScheduleTimer.csproj"
+          $csproj = [xml](Get-Content $csprojPath -Raw)
+          ($csproj.Project.PropertyGroup | Where-Object { $_.Version }).Version = $ver3
+          $csproj.Save((Resolve-Path $csprojPath))
+
+          $manifestPath = "ScheduleTimer.Package/Package.appxmanifest"
+          $manifest = [xml](Get-Content $manifestPath -Raw)
+          $manifest.Package.Identity.Version = $ver4
+          $manifest.Save((Resolve-Path $manifestPath))
+
+          Write-Host "Версия: csproj $ver3, манифест $ver4"
+
+      # Вариант 1: один exe со вшитым рантаймом — работает без установки .NET
+      - name: Publish self-contained
+        run: >
+          dotnet publish ScheduleTimer.csproj -c Release -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish/self-contained
+
+      # Вариант 2: один лёгкий exe без рантайма — нужен .NET 8 Desktop Runtime
+      - name: Publish no-runtime
+        run: >
+          dotnet publish ScheduleTimer.csproj -c Release -r win-x64
+          --self-contained false
+          -p:PublishSingleFile=true
+          -o publish/no-runtime
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}" -replace '^v',''
+          if ("${{ github.ref_type }}" -ne "tag") { $ver = "dev" }
+          Compress-Archive -Path publish/self-contained/* -DestinationPath "ScheduleTimer-$ver-win-x64.zip"
+          Compress-Archive -Path publish/no-runtime/*     -DestinationPath "ScheduleTimer-$ver-win-x64-no-runtime.zip"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScheduleTimer
+          path: '*.zip'
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.zip'
+          generate_release_notes: true
+
+      # ---------------------------------------------------------------
+      # MSIX — ВРЕМЕННО ОТКЛЮЧЕНО (до одобрения имени в Microsoft Store).
+      # Чтобы вернуть: раскомментировать шаги ниже и шаг setup-msbuild.
+      # ---------------------------------------------------------------
+      #
+      # - name: Add MSBuild to PATH
+      #   uses: microsoft/setup-msbuild@v2
+      #
+      # # Sideload-пакет (.msix); подпись делает Store, поэтому не подписываем
+      # - name: Build MSIX (sideload)
+      #   run: >
+      #     msbuild ScheduleTimer.sln /restore
+      #     /p:Configuration=Release /p:Platform=x64
+      #     /p:UapAppxPackageBuildMode=SideloadOnly /p:AppxBundle=Never
+      #     /p:AppxPackageDir=${{ github.workspace }}\artifacts\
+      #
+      # # Бандл для Microsoft Store (.msixupload)
+      # - name: Build Store upload bundle
+      #   run: >
+      #     msbuild ScheduleTimer.Package\ScheduleTimer.Package.wapproj
+      #     /p:Configuration=Release /p:Platform=x64
+      #     /p:UapAppxPackageBuildMode=StoreUpload /p:AppxBundle=Always
+      #     /p:AppxPackageDir=${{ github.workspace }}\artifacts\
+      #
+      # # ...и добавить msix/msixupload в Upload artifacts и Release:
+      # #   artifacts/**/*.msix
+      # #   artifacts/**/*.msixupload

@@ -32,6 +32,11 @@ namespace ScheduleTimer
         private string? _selectedScheduleName;
         private DateTime _schedulePopupClosedAt; // для тоггла: клик по названию при открытом списке
 
+        // askProjectName: спрашивать название проекта при старте расписания.
+        // Введённое имя добавляется тегом ко всем логируемым периодам: «Работа [Проект №1]».
+        private bool _askProjectName;
+        private string _projectName = "";
+
         // Итоги сессии: отработанные секунды по периодам (подготовка не учитывается,
         // паузы исключены счётчиком _stageActiveSeconds). Порядок — по первому появлению.
         private readonly List<string> _summaryOrder = new();
@@ -219,6 +224,7 @@ namespace ScheduleTimer
                     _selectedScheduleName = null;
                     active = schedules.FirstOrDefault(s => s.Active);
                 }
+                _askProjectName = active?.AskProjectName == true;
 
                 UpdateTitleCursor();
 
@@ -340,11 +346,15 @@ namespace ScheduleTimer
             if (_currentTask == null || _stageLogged || _currentTask.IsPrepare || _stageActiveSeconds <= 0)
                 return;
             _stageLogged = true;
-            Logger.StageCompleted(_currentTask.Period.Name, _stageActiveSeconds);
-            Analytics.StageCompleted(_currentTask.Period.Name, _stageActiveSeconds);
 
-            // Копим итоги сессии для окна «Итоги» (по Стоп / финишу сценария)
-            var name = _currentTask.Period.Name;
+            // Тег проекта (askProjectName) добавляется ко всем логируемым именам —
+            // одинаково в логе, аналитике и окне итогов.
+            var name = string.IsNullOrEmpty(_projectName)
+                ? _currentTask.Period.Name
+                : $"{_currentTask.Period.Name} [{_projectName}]";
+
+            Logger.StageCompleted(name, _stageActiveSeconds);
+            Analytics.StageCompleted(name, _stageActiveSeconds);
             if (!_summary.TryGetValue(name, out var acc)) _summaryOrder.Add(name);
             _summary[name] = (_currentTask.Period.Color, acc.Seconds + _stageActiveSeconds);
         }
@@ -669,6 +679,7 @@ namespace ScheduleTimer
         {
             if (_state == RunState.Idle && _taskQueue.Count > 0)
             {
+                AskProjectNameIfNeeded();
                 StartNextTask();
                 _timer.Start();
             }
@@ -757,13 +768,31 @@ namespace ScheduleTimer
             _summaryOrder.Clear();
             _summary.Clear();
 
-            // Пока открыто модальное окно — блурим содержимое и затемняем его.
-            // Фон и рамка «карточки» остаются чёткими (эффект только на RootGrid).
+            ShowModalDimmed(new SummaryWindow(items));
+        }
+
+        // Перед стартом расписания с askProjectName спрашиваем название проекта —
+        // только пока время ещё не тратилось (итоги сессии пусты). Esc/пустой ввод
+        // не ломают старт: просто работаем без тега.
+        private void AskProjectNameIfNeeded()
+        {
+            if (!_askProjectName || _summary.Count > 0) return;
+
+            var dlg = new ProjectNameWindow(_projectName);
+            ShowModalDimmed(dlg);
+            _projectName = dlg.ProjectName;
+        }
+
+        // Показывает модальное окно, блуря и затеняя содержимое под ним.
+        // Фон и рамка «карточки» остаются чёткими (эффект только на RootGrid).
+        private void ShowModalDimmed(Window dlg)
+        {
             ModalDim.Visibility = Visibility.Visible;
             RootGrid.Effect = new BlurEffect { Radius = 10 };
             try
             {
-                new SummaryWindow(items) { Owner = this }.ShowDialog();
+                dlg.Owner = this;
+                dlg.ShowDialog();
             }
             finally
             {

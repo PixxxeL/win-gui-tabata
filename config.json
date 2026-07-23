@@ -3,6 +3,7 @@
     {
       "name": "Стандартный",
       "active": true,
+      "askProjectName": true,
       "periods": [
         {
           "name": "Работа",

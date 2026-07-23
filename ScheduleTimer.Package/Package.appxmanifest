@@ -15,7 +15,7 @@
   <Identity
     Name="ScheduleTimer.PLACEHOLDER"
     Publisher="CN=PLACEHOLDER"
-    Version="1.0.1.0"
+    Version="1.1.0.0"
     ProcessorArchitecture="x64" />
 
   <Properties>

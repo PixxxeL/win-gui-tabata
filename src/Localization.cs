@@ -44,6 +44,7 @@ namespace ScheduleTimer
                 ["already_running"] = "The application is already running",
                 ["summary_title"] = "Time summary", ["summary_total"] = "Total",
                 ["unit_d"] = "d", ["unit_h"] = "h", ["unit_m"] = "min", ["unit_s"] = "s",
+                ["project_title"] = "Project", ["project_prompt"] = "Project name (optional)",
             },
             ["ru"] = new()
             {
@@ -55,6 +56,7 @@ namespace ScheduleTimer
                 ["already_running"] = "Приложение уже запущено",
                 ["summary_title"] = "Итоги", ["summary_total"] = "Итого",
                 ["unit_d"] = "д", ["unit_h"] = "ч", ["unit_m"] = "мин", ["unit_s"] = "сек",
+                ["project_title"] = "Проект", ["project_prompt"] = "Название проекта (необязательно)",
             },
             ["zh"] = new()
             {
@@ -66,6 +68,7 @@ namespace ScheduleTimer
                 ["already_running"] = "应用程序已在运行",
                 ["summary_title"] = "统计", ["summary_total"] = "总计",
                 ["unit_d"] = "天", ["unit_h"] = "小时", ["unit_m"] = "分", ["unit_s"] = "秒",
+                ["project_title"] = "项目", ["project_prompt"] = "项目名称（可选）",
             },
             ["ja"] = new()
             {
@@ -77,6 +80,7 @@ namespace ScheduleTimer
                 ["already_running"] = "アプリはすでに起動しています",
                 ["summary_title"] = "集計", ["summary_total"] = "合計",
                 ["unit_d"] = "日", ["unit_h"] = "時間", ["unit_m"] = "分", ["unit_s"] = "秒",
+                ["project_title"] = "プロジェクト", ["project_prompt"] = "プロジェクト名（任意）",
             },
             ["de"] = new()
             {
@@ -87,6 +91,7 @@ namespace ScheduleTimer
                 ["err_no_active"] = "Keine aktiven Zeitpläne", ["err_prefix"] = "Fehler", ["loading"] = "Wird geladen…",
                 ["summary_title"] = "Zusammenfassung", ["summary_total"] = "Gesamt",
                 ["unit_d"] = "T", ["unit_h"] = "Std.", ["unit_m"] = "Min.", ["unit_s"] = "Sek.",
+                ["project_title"] = "Projekt", ["project_prompt"] = "Projektname (optional)",
             },
             ["es"] = new()
             {
@@ -97,6 +102,7 @@ namespace ScheduleTimer
                 ["err_no_active"] = "No hay horarios activos", ["err_prefix"] = "Error", ["loading"] = "Cargando…",
                 ["summary_title"] = "Resumen", ["summary_total"] = "Total",
                 ["unit_d"] = "d", ["unit_h"] = "h", ["unit_m"] = "min", ["unit_s"] = "s",
+                ["project_title"] = "Proyecto", ["project_prompt"] = "Nombre del proyecto (opcional)",
             },
             ["fr"] = new()
             {
@@ -107,6 +113,7 @@ namespace ScheduleTimer
                 ["err_no_active"] = "Aucun programme actif", ["err_prefix"] = "Erreur", ["loading"] = "Chargement…",
                 ["summary_title"] = "Résumé", ["summary_total"] = "Total",
                 ["unit_d"] = "j", ["unit_h"] = "h", ["unit_m"] = "min", ["unit_s"] = "s",
+                ["project_title"] = "Projet", ["project_prompt"] = "Nom du projet (facultatif)",
             },
             ["it"] = new()
             {
@@ -117,6 +124,7 @@ namespace ScheduleTimer
                 ["err_no_active"] = "Nessuna pianificazione attiva", ["err_prefix"] = "Errore", ["loading"] = "Caricamento…",
                 ["summary_title"] = "Riepilogo", ["summary_total"] = "Totale",
                 ["unit_d"] = "g", ["unit_h"] = "h", ["unit_m"] = "min", ["unit_s"] = "s",
+                ["project_title"] = "Progetto", ["project_prompt"] = "Nome del progetto (facoltativo)",
             },
             ["pt"] = new()
             {
@@ -127,6 +135,7 @@ namespace ScheduleTimer
                 ["err_no_active"] = "Nenhuma agenda ativa", ["err_prefix"] = "Erro", ["loading"] = "Carregando…",
                 ["summary_title"] = "Resumo", ["summary_total"] = "Total",
                 ["unit_d"] = "d", ["unit_h"] = "h", ["unit_m"] = "min", ["unit_s"] = "s",
+                ["project_title"] = "Projeto", ["project_prompt"] = "Nome do projeto (opcional)",
             },
         };
     }

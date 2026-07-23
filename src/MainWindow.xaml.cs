@@ -26,6 +26,11 @@ namespace ScheduleTimer
         private RunState _state = RunState.Idle;
         private string _scheduleName = "Нет данных";
 
+        // Итоги сессии: отработанные секунды по периодам (подготовка не учитывается,
+        // паузы исключены счётчиком _stageActiveSeconds). Порядок — по первому появлению.
+        private readonly List<string> _summaryOrder = new();
+        private readonly Dictionary<string, (int Color, int Seconds)> _summary = new();
+
         // За сколько секунд до конца периода проигрывается предупреждающий сигнал
         private const int BeforeFinishLeadSeconds = 5;
 
@@ -306,6 +311,11 @@ namespace ScheduleTimer
             _stageLogged = true;
             Logger.StageCompleted(_currentTask.Period.Name, _stageActiveSeconds);
             Analytics.StageCompleted(_currentTask.Period.Name, _stageActiveSeconds);
+
+            // Копим итоги сессии для окна «Итоги» (по Стоп / финишу сценария)
+            var name = _currentTask.Period.Name;
+            if (!_summary.TryGetValue(name, out var acc)) _summaryOrder.Add(name);
+            _summary[name] = (_currentTask.Period.Color, acc.Seconds + _stageActiveSeconds);
         }
 
         // Приводит петлю тиканья в соответствие текущему состоянию: играет непрерывно, пока
@@ -640,6 +650,34 @@ namespace ScheduleTimer
             TxtMinutes.Text = "00"; TxtSeconds.Text = "00";
             UpdateButtonStates();
             LoadSchedule(); // перечитывает JSON и обновляет текст фазы (в т.ч. в покое)
+            ShowSummary();  // модальные итоги сессии — после сброса UI
+        }
+
+        // Показывает модальное окно итогов и очищает накопленное. Не показываем,
+        // если работать не начинали (Стоп в покое) или ни один этап не успел натикать.
+        private void ShowSummary()
+        {
+            if (_summaryOrder.Count == 0) return;
+
+            var items = _summaryOrder
+                .Select(n => (n, _summary[n].Color, _summary[n].Seconds))
+                .ToList();
+            _summaryOrder.Clear();
+            _summary.Clear();
+
+            // Пока открыто модальное окно — блурим содержимое и затемняем его.
+            // Фон и рамка «карточки» остаются чёткими (эффект только на RootGrid).
+            ModalDim.Visibility = Visibility.Visible;
+            RootGrid.Effect = new BlurEffect { Radius = 10 };
+            try
+            {
+                new SummaryWindow(items) { Owner = this }.ShowDialog();
+            }
+            finally
+            {
+                RootGrid.Effect = null;
+                ModalDim.Visibility = Visibility.Collapsed;
+            }
         }
 
         // При закрытии окна фиксируем незавершённый этап — иначе отработанное время потеряется.

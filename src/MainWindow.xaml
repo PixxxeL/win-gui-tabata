@@ -95,7 +95,8 @@
             </LinearGradientBrush>
         </Border.Background>
 
-        <Grid Margin="4">
+        <Grid>
+        <Grid x:Name="RootGrid" Margin="4">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -192,6 +193,12 @@
                 <TextBlock x:Name="LblVersion" Text="v1.0.0" HorizontalAlignment="Center"
                            Margin="0,8,0,0" FontSize="9" Foreground="#4A4F59"/>
             </StackPanel>
+        </Grid>
+
+        <!-- Затемнение поверх содержимого, пока открыто модальное окно (итоги).
+             Само содержимое дополнительно блурится в code-behind (ShowSummary). -->
+        <Border x:Name="ModalDim" CornerRadius="15" Background="#99060910"
+                Visibility="Collapsed"/>
         </Grid>
     </Border>
 </Window>

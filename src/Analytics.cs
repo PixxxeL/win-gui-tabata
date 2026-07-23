@@ -32,7 +32,13 @@ namespace ScheduleTimer
         private static readonly bool Enabled = PostApiKey.Length > 0 && AppId.Length > 0;
         private static readonly string ProfileId = Enabled ? GetOrCreateProfileId() : "";
 
-        public static void AppStarted() => Send("app_start", null);
+        public static void AppStarted()
+        {
+            Log(Enabled
+                ? $"analytics ENABLED, app_id={AppId}, profile_id={ProfileId}"
+                : "analytics DISABLED (ключи не вшиты в сборку)");
+            Send("app_start", null);
+        }
 
         public static void StageCompleted(string name, int seconds) =>
             Send("stage_done", JsonSerializer.Serialize(new { name, seconds }));
@@ -50,13 +56,52 @@ namespace ScheduleTimer
             if (!string.IsNullOrEmpty(eventJson))
                 url += $"&event_json={Uri.EscapeDataString(eventJson)}";
 
-            _ = PostAsync(url); // fire-and-forget: UI не блокируем
+            _ = PostAsync(url, eventName); // fire-and-forget: UI не блокируем
         }
 
-        private static async Task PostAsync(string url)
+        private static async Task PostAsync(string url, string eventName)
         {
-            try { using var _ = await Http.PostAsync(url, null).ConfigureAwait(false); }
-            catch { /* оффлайн / сбой сети — не мешаем работе таймера */ }
+            try
+            {
+                using var resp = await Http.PostAsync(url, null).ConfigureAwait(false);
+                if (resp.IsSuccessStatusCode)
+                {
+                    Log($"{eventName}: {(int)resp.StatusCode} OK");
+                }
+                else
+                {
+                    var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    Log($"{eventName}: {(int)resp.StatusCode} {resp.ReasonPhrase} — {Truncate(body, 500)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                // оффлайн / сбой сети — не мешаем работе таймера, но фиксируем в лог
+                Log($"{eventName}: EXCEPTION {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        private static string Truncate(string s, int max) =>
+            s.Length <= max ? s : s[..max] + "…";
+
+        // Лог в файл рядом с данными приложения. Ключ API в лог не пишем.
+        // Ошибки записи глушим — логирование не должно ломать приложение.
+        private static readonly object LogLock = new();
+        private static void Log(string message)
+        {
+            try
+            {
+                var path = Path.Combine(AppPaths.DataDir, "analytics.log");
+                var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz} {message}{Environment.NewLine}";
+                lock (LogLock)
+                {
+                    // не даём логу расти бесконечно: при превышении 256 КБ начинаем заново
+                    if (File.Exists(path) && new FileInfo(path).Length > 256 * 1024)
+                        File.Delete(path);
+                    File.AppendAllText(path, line);
+                }
+            }
+            catch { }
         }
 
         // Значение, вшитое в сборку из одноимённой переменной окружения (AssemblyMetadata в .csproj).
@@ -85,7 +130,7 @@ namespace ScheduleTimer
                 File.WriteAllText(path, newId);
                 return newId;
             }
-            catch { return "windows-desktop"; }
+            catch (Exception ex) { Log($"profile_id: EXCEPTION {ex.GetType().Name}: {ex.Message}"); return "windows-desktop"; }
         }
     }
 }

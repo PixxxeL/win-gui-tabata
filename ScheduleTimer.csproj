@@ -5,7 +5,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationIcon>assets\icon.ico</ApplicationIcon>
     <Version>1.0.1</Version>
     <!-- Нужно для WAP/MSIX: пакет собирает приложение под win-x64 RID -->
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
@@ -30,10 +30,19 @@
     </AssemblyAttribute>
   </ItemGroup>
 
-  <!-- Звук тиканья вшит в бинарник как ресурс (не копируется наружу) -->
+  <!-- App.xaml переехал в src\ — дефолтный глоб WPF ищет его только в корне,
+       поэтому указываем явно (и убираем из Page, куда его включит общий глоб) -->
   <ItemGroup>
-    <None Remove="zvuk-chasov.mp3" />
-    <EmbeddedResource Include="zvuk-chasov.mp3" />
+    <ApplicationDefinition Include="src\App.xaml" />
+    <Page Remove="src\App.xaml" />
+  </ItemGroup>
+
+  <!-- Звук тиканья вшит в бинарник как ресурс (не копируется наружу).
+       Имя манифест-ресурса теперь ScheduleTimer.assets.zvuk-chasov.mp3 —
+       поиск в SoundHelper идёт по EndsWith, так что код не трогаем. -->
+  <ItemGroup>
+    <None Remove="assets\zvuk-chasov.mp3" />
+    <EmbeddedResource Include="assets\zvuk-chasov.mp3" />
   </ItemGroup>
 
   <!-- config.json остаётся внешним (его правит пользователь) -->

@@ -149,9 +149,22 @@
                 <Canvas x:Name="TicksCanvas" HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <!-- Название расписания; при нескольких расписаниях кликабельно —
+                         раскрывает список выбора (SchedulePopup) -->
                     <TextBlock x:Name="LblTitle" Text="Загрузка..." TextAlignment="Center"
                                FontSize="20" FontWeight="SemiBold" Foreground="#E8EAED"
-                               HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                               HorizontalAlignment="Center" Margin="0,0,0,2"
+                               MouseLeftButtonDown="LblTitle_Click"/>
+
+                    <!-- Выпадающий список расписаний; наполняется в code-behind -->
+                    <Popup x:Name="SchedulePopup" PlacementTarget="{Binding ElementName=LblTitle}"
+                           Placement="Bottom" VerticalOffset="6" StaysOpen="False"
+                           AllowsTransparency="True">
+                        <Border CornerRadius="10" BorderThickness="1" BorderBrush="#3A3F4A"
+                                Background="#1B1F27" Padding="5">
+                            <StackPanel x:Name="SchedulePopupList"/>
+                        </Border>
+                    </Popup>
 
                     <!-- Двоеточия — отдельные блоки с фиксированным мелким размером
                          (код их не масштабирует, только цифры) -->

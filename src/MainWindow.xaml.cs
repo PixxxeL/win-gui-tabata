@@ -26,6 +26,12 @@ namespace ScheduleTimer
         private RunState _state = RunState.Idle;
         private string _scheduleName = "Нет данных";
 
+        // Выбор расписания кликом по названию. Выбранное имя переживает Stop/LoadSchedule,
+        // но не перезапуск приложения (конфиг не переписываем — он принадлежит пользователю).
+        private List<string> _scheduleNames = new();
+        private string? _selectedScheduleName;
+        private DateTime _schedulePopupClosedAt; // для тоггла: клик по названию при открытом списке
+
         // Итоги сессии: отработанные секунды по периодам (подготовка не учитывается,
         // паузы исключены счётчиком _stageActiveSeconds). Порядок — по первому появлению.
         private readonly List<string> _summaryOrder = new();
@@ -197,7 +203,24 @@ namespace ScheduleTimer
                 var json = File.ReadAllText(jsonPath);
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var config = JsonSerializer.Deserialize<ScheduleConfig>(json, options);
-                var active = config?.Schedules?.FirstOrDefault(s => s.Active);
+                var schedules = config?.Schedules ?? new List<Schedule>();
+                _scheduleNames = schedules
+                    .Select(s => s.Name)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .ToList();
+
+                // Выбранное кликом расписание приоритетнее флага active; если его
+                // больше нет в конфиге (файл отредактировали) — откат к active.
+                var active = _selectedScheduleName != null
+                    ? schedules.FirstOrDefault(s => s.Name == _selectedScheduleName)
+                    : null;
+                if (active == null)
+                {
+                    _selectedScheduleName = null;
+                    active = schedules.FirstOrDefault(s => s.Active);
+                }
+
+                UpdateTitleCursor();
 
                 // Всегда начинаем с пустой очереди — LoadSchedule может вызываться повторно
                 _taskQueue.Clear();
@@ -265,7 +288,15 @@ namespace ScheduleTimer
         {
             BtnPlay.Tag = _state is RunState.Working or RunState.Prepare ? "active" : null;
             BtnPause.Tag = _state == RunState.Paused ? "active" : null;
+            UpdateTitleCursor(); // вызывается на каждой смене состояния — курсор всегда актуален
         }
+
+        // Курсор-рука на названии — только когда выбор реально доступен:
+        // таймер в покое и расписаний больше одного.
+        private void UpdateTitleCursor() =>
+            LblTitle.Cursor = _state == RunState.Idle && _scheduleNames.Count > 1
+                ? Cursors.Hand
+                : null;
 
         private void Timer_Tick(object? sender, EventArgs e)
         {
@@ -429,6 +460,67 @@ namespace ScheduleTimer
             _tickGlow.Freeze();
 
             UpdateTicks((double)_elapsedSeconds / _currentTask.TotalSeconds);
+        }
+
+        // --- Выбор расписания кликом по названию ---
+
+        // Клик по названию: если расписаний больше одного и таймер в покое —
+        // раскрываем список. Повторный клик при открытом списке закрывает его
+        // (Popup со StaysOpen=False закрывается сам, отличаем по времени закрытия).
+        private void LblTitle_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true; // клик по названию не тянет окно
+
+            if (_state != RunState.Idle || _scheduleNames.Count < 2) return;
+            if ((DateTime.UtcNow - _schedulePopupClosedAt).TotalMilliseconds < 250)
+                return; // список только что закрылся этим же кликом — это был тоггл
+
+            SchedulePopupList.Children.Clear();
+            foreach (var name in _scheduleNames)
+                SchedulePopupList.Children.Add(CreateScheduleItem(name, name == _scheduleName));
+
+            SchedulePopup.Closed -= SchedulePopup_Closed;
+            SchedulePopup.Closed += SchedulePopup_Closed;
+            SchedulePopup.IsOpen = true;
+        }
+
+        private void SchedulePopup_Closed(object? sender, EventArgs e) =>
+            _schedulePopupClosedAt = DateTime.UtcNow;
+
+        // Пункт списка: скруглённая строка с подсветкой при наведении; текущее
+        // расписание выделено. По клику — выбрать и вернуть лейбу с новым именем.
+        private UIElement CreateScheduleItem(string name, bool isCurrent)
+        {
+            var text = new System.Windows.Controls.TextBlock
+            {
+                Text = name,
+                FontSize = 14,
+                Foreground = isCurrent
+                    ? CreateFrozenBrush(Color.FromRgb(0xE8, 0xEA, 0xED))
+                    : CreateFrozenBrush(Color.FromRgb(0xB9, 0xBE, 0xC7)),
+                FontWeight = isCurrent ? FontWeights.SemiBold : FontWeights.Normal,
+                Margin = new Thickness(12, 6, 12, 6)
+            };
+            var item = new System.Windows.Controls.Border
+            {
+                CornerRadius = new CornerRadius(6),
+                Background = Brushes.Transparent,
+                Cursor = Cursors.Hand,
+                Child = text
+            };
+
+            var hover = CreateFrozenBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+            item.MouseEnter += (_, _) => item.Background = hover;
+            item.MouseLeave += (_, _) => item.Background = Brushes.Transparent;
+            item.MouseLeftButtonUp += (_, _) =>
+            {
+                SchedulePopup.IsOpen = false;
+                if (name == _scheduleName) return; // выбрали то же — ничего не делаем
+
+                _selectedScheduleName = name;
+                LoadSchedule(); // перечитывает конфиг, строит очередь выбранного, обновляет лейбу
+            };
+            return item;
         }
 
         // --- Кастомная рамка окна ---

@@ -34,6 +34,26 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Быстрый",
+      "active": false,
+      "periods": [
+        {
+          "name": "Работа",
+          "color": "0x336699",
+          "prepare": 0,
+          "duration": 30,
+          "repeat": 1,
+          "sound": {
+            "start": null,
+            "running": null,
+            "beforeFinish": null,
+            "finish": null
+          },
+          "periods": []
+        }
+      ]
     }
   ]
 }
